@@ -24,18 +24,20 @@ def fetch_gpr_data():
         # Let pandas auto-detect the Excel format (handles .xls and .xlsx)
         df = pd.read_excel(url)
         
-        df.columns = df.columns.str.strip()
-        if 'Date' not in df.columns or 'GPR' not in df.columns:
-            raise ValueError("Excel file missing 'Date' or 'GPR' column")
+         # The actual columns are: 'month' (str) and 'GPR' (float)
+        if 'month' not in df.columns or 'GPR' not in df.columns:
+            raise ValueError("Expected columns 'month' and 'GPR' not found in Excel file")
         
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        # Parse 'month' as datetime (format: "YYYY-MM" or "YYYY-MM-DD")
+        df['Date'] = pd.to_datetime(df['month'], errors='coerce')
         df = df.dropna(subset=['Date', 'GPR'])
         df = df.set_index('Date').sort_index()
+        
         return df[['GPR']]
     
     except Exception as e:
         print(f"❌ Failed to fetch or parse GPR data: {e}")
-        print("💡 Visit https://www.matteoiacoviello.com/gpr.htm to verify the file is online.")
+        print("💡 Tip: Visit https://www.matteoiacoviello.com/gpr.htm to verify the file structure.")
         sys.exit(1)
 
 def get_forex_data(pair="EURUSD=X", start="2010-01-01"):
