@@ -86,7 +86,7 @@ def main():
         sigma = pm.HalfNormal("sigma", sigma=0.02)
         mu = alpha + beta * df["gpr_std"].values
         pm.Normal("returns", mu=mu, sigma=sigma, observed=df["return"].values)
-        trace = pm.sample(1000, tune=500, chains=2, cores=1, random_seed=42, progressbar=False)
+        trace = pm.sample(1000, tune=1000, chains=4, cores=4, random_seed=42, progressbar=True)
 
     # === 3. Forecast ===
     gpr_today = df["gpr_std"].iloc[-1]
