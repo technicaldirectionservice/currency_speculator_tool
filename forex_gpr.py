@@ -14,16 +14,33 @@ import numpy as np
 import pymc as pm
 import arviz as az
 import sys
+import openpyxl
 
 def fetch_gpr_data():
-    """Fetch GPR index directly from official GitHub repo"""
+    """Fetch GPR index from official academic source (Iacoviello)"""
     print("📥 Fetching Geopolitical Risk (GPR) Index...")
-    url = "https://raw.githubusercontent.com/Geopolitical-Risk-Index/GPR-Index/main/data/GPR.csv"
+    url = "https://www.matteoiacoviello.com/gpr_files/data_gpr_export.xls"
     try:
-        gpr = pd.read_csv(url, parse_dates=["Date"], index_col="Date")
-        return gpr.sort_index()
+        # Read Excel directly from URL
+        df = pd.read_excel(url, engine='openpyxl')
+        
+        # Standardize column names (in case of extra whitespace)
+        df.columns = df.columns.str.strip()
+        
+        # Ensure required columns exist
+        if 'Date' not in df.columns or 'GPR' not in df.columns:
+            raise ValueError("Excel file missing 'Date' or 'GPR' column")
+        
+        # Parse dates and clean
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df = df.dropna(subset=['Date', 'GPR'])
+        df = df.set_index('Date').sort_index()
+        
+        return df[['GPR']]
+    
     except Exception as e:
-        print(f"❌ Failed to fetch GPR data: {e}")
+        print(f"❌ Failed to fetch or parse GPR data: {e}")
+        print("💡 Tip: Visit https://www.matteoiacoviello.com/gpr.htm to verify the file is online.")
         sys.exit(1)
 
 def get_forex_data(pair="EURUSD=X", start="2010-01-01"):
@@ -31,7 +48,7 @@ def get_forex_data(pair="EURUSD=X", start="2010-01-01"):
     print(f"📥 Fetching {pair} data...")
     try:
         data = yf.download(pair, start=start)
-        data["return"] = data["Adj Close"].pct_change()
+        data["return"] = data["Close"].pct_change()
         return data.dropna()
     except Exception as e:
         print(f"❌ Failed to fetch {pair} data: {e}")
