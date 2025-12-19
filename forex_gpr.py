@@ -45,8 +45,14 @@ def get_forex_data(pair="EURUSD=X", start="2010-01-01"):
     print(f"📥 Fetching {pair} data...")
     try:
         data = yf.download(pair, start=start)
+        # Flatten columns if MultiIndex (happens with yfinance)
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.droplevel(1)  # keep 'Close', not (pair, 'Close')
         data["return"] = data["Close"].pct_change()
-        return data.dropna()
+        data = data.dropna()
+        # Ensure index is simple DatetimeIndex
+        data.index.name = 'Date'
+        return data
     except Exception as e:
         print(f"❌ Failed to fetch {pair} data: {e}")
         sys.exit(1)
