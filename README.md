@@ -6,7 +6,7 @@ A terminal-based Bayesian forecaster that predicts EUR/USD moves using real-worl
 
 ## Features
 - 🔮 Probabilistic forecast (not just a point estimate)
-- 🌍 Uses the official [Geopolitical Risk (GPR) Index](https://www.geopoliticalriskindex.com)
+- 🌍 Uses Iacoviello and Caldara's [Geopolitical Risk (GPR) Index](https://www.matteoiacoviello.com/gpr.htm)
 - ⚖️ Suggests position size based on your risk tolerance
 - 🆓 100% free and open — no API keys needed
 
@@ -18,7 +18,7 @@ A terminal-based Bayesian forecaster that predicts EUR/USD moves using real-worl
 
 ## Data Sources
 - **Forex**: Yahoo Finance (`EURUSD=X`)
-- **GPR Index**: [Geopolitical-Risk-Index/GPR-Index](https://github.com/Geopolitical-Risk-Index/GPR-Index)
+- **GPR Index**: [Geopolitical-Risk-Index/GPR-Index](https://www.matteoiacoviello.com/gpr_files/data_gpr_export.xls)
 
 ## Disclaimer
 This tool is for educational/research purposes only. Not financial advice. Trading involves risk of loss.
