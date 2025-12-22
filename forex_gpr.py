@@ -157,7 +157,7 @@ def main():
     position = kelly * risk_factor
 
     # Cap leverage
-    position = max(-2.0, min(2.0, position))
+    position = max(-1.0, min(1.0, position))
 
     # Interpretation
     if position > 0:
