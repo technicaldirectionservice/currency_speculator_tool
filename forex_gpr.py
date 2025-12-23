@@ -149,10 +149,10 @@ def main():
         print("⚠️  Invalid input. Using default risk=5.")
         user_risk = 5.0
 
-    # Kelly-inspired sizing (scaled)
+    # Kelly-inspired sizing (fractional + capped)
     expected_return = median_ret
     variance = np.var(returns_pred)
-    kelly = expected_return / (variance + 1e-8) if variance > 0 else 0.0
+    kelly = 0.5 * expected_return / (variance + 1e-8) if variance > 0 else 0.0
     risk_factor = user_risk / 10.0
     position = kelly * risk_factor
 
