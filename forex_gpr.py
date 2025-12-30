@@ -28,6 +28,12 @@ FOREX_PAIRS = {
     "NZD/USD": "NZDUSD=X",
     "USD/HKD": "HKD=X",
     "USD/CNY": "USDCNY=X",
+    "USD/MXN": "MXN=X",
+    "USD/ZAR": "ZAR=X",
+    "USD/ILS": "ILS=X",
+    "USD/KRW": "KRW=X",
+    "USD/DKK": "DKK=X",
+    "USD/RUB": "RUB=X",
 }
 
 def fetch_gpr_data():

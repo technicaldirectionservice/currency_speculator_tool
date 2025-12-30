@@ -6,10 +6,10 @@ A terminal-based Bayesian forecaster that predicts moves using real-world geopol
 A true multi-currency geopolitical risk dashboard — all in your terminal.
 
 ## Features
-- 🔮 Probabilistic forecast (not just a point estimate)
-- 🌍 Uses Iacoviello and Caldara's [Geopolitical Risk (GPR) Index](https://www.matteoiacoviello.com/gpr.htm)
-- ⚖️ Suggests position size based on your risk tolerance
-- 🆓 100% free and open — no API keys needed
+- Probabilistic forecast (not just a point estimate)
+- Uses Iacoviello and Caldara's [Geopolitical Risk (GPR) Index](https://www.matteoiacoviello.com/gpr.htm)
+- Suggests position size based on your risk tolerance
+- 100% free and open — no API keys needed
 
 ## How to Use
 1. Install Python 3.9+
@@ -18,7 +18,7 @@ A true multi-currency geopolitical risk dashboard — all in your terminal.
 4. Enter your risk tolerance (1–10)
 
 ## Data Sources
-- **Forex**: Yahoo Finance (`EURUSD=X`)
+- **Forex**: Yahoo Finance (`EURUSD=X`...and the rest, add more if you like!)
 - **GPR Index**: [Geopolitical-Risk-Index/GPR-Index](https://www.matteoiacoviello.com/gpr_files/data_gpr_export.xls)
 
 ## Disclaimer
