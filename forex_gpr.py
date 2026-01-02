@@ -138,7 +138,13 @@ def run_bayesian_model(forex_returns, pair_name):
     size = f"{abs(position)*100:.1f}%" if position != 0 else "0%"
     print(f"\n🎯 Suggested action: {direction} {size} on {pair_name}")
 
-    print("\n💡 Note: This is not financial advice. Use at your own risk.")
+    print("\n🔍 Important Notes:")
+    print("- GPR data is published with a ~1-month lag")
+    print("- Forecast is for *next trading day only*")
+    print("- JPY and CHF may diverge due to monetary policy (2024–2025)")
+    print("-  This is not financial advice. Use at your own risk.")
+
+    
 
 def main():
     print("🌍 Geopolitical Forex Forecaster")

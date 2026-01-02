@@ -1,0 +1,21 @@
+MANUAL STRESS TEST GUIDE
+
+1. TEST CRISIS REACTIONS:
+   - Run forex_gpr.py on these dates (simulate via system clock or mental note):
+     • 2022-02-23 → Should SHORT USD/JPY (JPY safe haven)
+     • 2023-10-06 → Should SHORT USD/ILS (shekel weakens)
+     • 2024-08-05 → Should LONG USD/JPY (BoJ intervention failed)
+
+2. TEST CURRENCY DIVERGENCE:
+   - Compare USD/JPY vs USD/CHF during high-GPR days
+   - Note: JPY may weaken while CHF strengthens (2024–2025 regime)
+
+3. TEST EXTREME INPUTS:
+   - Select same currency twice → should error
+   - Select invalid pair → should error gracefully
+
+4. RUN AUTOMATED TESTS:
+   python3 test_stress.py
+
+5. RUN FULL BACKTEST:
+   python3 backtest.py
