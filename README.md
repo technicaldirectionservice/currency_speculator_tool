@@ -1,9 +1,9 @@
 # currency_speculator_tool
-A research tool for currency speculators utilizing Markov Chain Monte Carlo predictive analysis, created using qwen.ai. 
+A research tool for currency speculators/ foreign exchange traders utilizing Markov Chain Monte Carlo predictive analysis, created using qwen.ai. 
 # Forex Geopolitical Risk Forecaster
 
 A terminal-based Bayesian forecaster that predicts moves using real-world geopolitical risk data.
-A true multi-currency geopolitical risk dashboard — all in your terminal.
+A true multi-currency geopolitical risk daily forcaster dashboard — all in your terminal.
 
 ## Features
 - Probabilistic forecast (not just a point estimate)
