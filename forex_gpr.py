@@ -14,6 +14,7 @@ import sys
 
 # Supported currencies (all quoted vs USD on Yahoo Finance)
 CURRENCY_SYMBOLS = {
+    "USD": None,
     "EUR": "EURUSD=X",
     "JPY": "JPY=X",
     "GBP": "GBPUSD=X",
