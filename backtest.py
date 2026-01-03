@@ -121,8 +121,9 @@ def run_backtest():
                 if len(returns_hist) < 100:
                     continue
                 
-                # Align with GPR
-                aligned = returns_hist.to_frame().join(gpr_daily, how="inner").dropna()
+                # ✅ Explicitly name the return column
+                returns_df = returns_hist.to_frame(name='return')
+                aligned = returns_df.join(gpr_daily, how="inner").dropna()
                 if len(aligned) < 50:
                     continue
                 
