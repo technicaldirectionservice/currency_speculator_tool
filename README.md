@@ -20,6 +20,7 @@ A true multi-currency geopolitical risk daily forcaster dashboard — all in you
 - **GPR Lag**: Geo-Political Risk data is published with a **~1-month delay** (e.g., January data released in February).
 - **Not Financial Advice**: This is a research tool. Always use stop-losses and never risk more than you can afford to lose.
 - **Regime Awareness**: Since 2024, **JPY no longer behaves as a traditional safe haven** due to BoJ policy — while **CHF remains reliable**.
+- Backtesting shows GPR provides a weak edge (51.3% accuracy), but monetary policy (especially BoJ) dominates in 2024–2025. Use this tool as a sentiment filter — not a standalone signal.
 
 ## 🚀 Quick Start
 
