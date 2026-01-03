@@ -19,7 +19,7 @@ from forex_gpr import CURRENCY_SYMBOLS
 def fetch_gpr_data():
     """Fetch GPR data (same as forex_gpr.py)"""
     import pandas as pd
-    url = "https://www.matteoiacoviello.com/gpr_files/gpr_monthly.xlsx"
+    url = "https://www.matteoiacoviello.com/gpr_files/data_gpr_export.xls"
     df = pd.read_excel(url)
     df['Date'] = pd.to_datetime(df['month'], errors='coerce')
     df = df.dropna(subset=['Date', 'GPR'])
@@ -34,15 +34,21 @@ def get_fx_series(symbol, start="2010-01-01", end="2025-12-31"):
 
 def compute_cross_rate(base, quote, start="2010-01-01", end="2025-12-31"):
     """Compute base/quote cross rate"""
+    from forex_gpr import CURRENCY_SYMBOLS
+
+    #Handle USD as base quote
     if base == "USD":
-        base_series = pd.Series(1.0, index=pd.date_range(start, end))
+        base_series = pd.Series(1.0, index=pd.date_range(start, end, freq='D'))
     else:
-        base_series = get_fx_series(CURRENCY_SYMBOLS[base], start, end)
+        if base not in CURRENCY_SYMBOLS:
+            raise ValueError(f"Base currency {base} not supported")
+        symbol= CURRENCY_SYMBOLS[base]
+        base_series = get_fx_series(symbol, start, end)
     
     if quote == "USD":
-        quote_series = pd.Series(1.0, index=pd.date_range(start, end))
+        quote_series = pd.Series(1.0, index=pd.date_range(start, end, freq='D'))
     else:
-        quote_series = get_fx_series(CURRENCY_SYMBOLS[quote], start, end)
+        quote_series = get_fx_series(symbol, start, end)
     
     df = pd.DataFrame({'base_usd': base_series, 'quote_usd': quote_series}).dropna()
     cross_rate = df['quote_usd'] / df['base_usd']
@@ -59,72 +65,81 @@ def run_backtest():
     
     start_date = datetime(2020, 1, 1)
     end_date = datetime(2025, 12, 31)
-    current = start_date
     
-    results = []
+    # ✅ Preload ALL data once
+    print("⏳ Preloading FX and GPR data...")
+    fx_data = preload_fx_data(PAIRS, start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
     gpr = fetch_gpr_data()
     gpr_daily = gpr.resample("D").ffill()
     
+    results = []
+    current = start_date
     print(f"📊 Backtesting from {start_date.date()} to {end_date.date()}...")
     
     while current <= end_date:
-        if current.weekday() >= 5:  # Skip weekends
-            current += timedelta(days=1)
-            continue
-            
-        # Get GPR as of current date (last available)
-        try:
-            gpr_today = gpr_daily.loc[:current].iloc[-1]['GPR']
-            gpr_std = (gpr_today - gpr['GPR'].mean()) / gpr['GPR'].std()
-        except:
-            current += timedelta(days=1)
-            continue
-        
-        for pair_name, base, quote in PAIRS:
+        if current.weekday() < 5:  # Weekdays only
             try:
-                returns = compute_cross_rate(base, quote, end=current.strftime("%Y-%m-%d"))
-                if len(returns) < 100:
+                gpr_today = gpr_daily.loc[:current].iloc[-1]['GPR']
+                gpr_std = (gpr_today - gpr['GPR'].mean()) / gpr['GPR'].std()
+            except:
+                current += timedelta(days=1)
+                continue
+            
+            for pair_name, base, quote in PAIRS:
+                # Get actual return for this date
+                actual_return = compute_cross_return(base, quote, current, fx_data)
+                if actual_return is None:
                     continue
-                    
-                # Simple regression: return ~ gpr_std
-                aligned = returns.to_frame().join(gpr_daily, how="inner").dropna()
+                
+                # Get next-day return for "actual" (what we're predicting for)
+                next_day = current + timedelta(days=1)
+                next_return = compute_cross_return(base, quote, next_day, fx_data)
+                if next_return is None:
+                    continue
+                
+                # Simple regression on full history up to current
+                base_series = fx_data["USD"] if base == "USD" else fx_data[CURRENCY_SYMBOLS[base]]
+                quote_series = fx_data["USD"] if quote == "USD" else fx_data[CURRENCY_SYMBOLS[quote]]
+                df_full = pd.DataFrame({'base_usd': base_series, 'quote_usd': quote_series}).dropna()
+                cross_full = df_full['quote_usd'] / df_full['base_usd']
+                returns_full = cross_full.pct_change().dropna()
+                returns_hist = returns_full[returns_full.index <= current]
+                
+                if len(returns_hist) < 100:
+                    continue
+                
+                aligned = returns_hist.to_frame().join(gpr_daily, how="inner").dropna()
                 if len(aligned) < 50:
                     continue
-                    
+                
                 aligned["gpr_std"] = (aligned["GPR"] - gpr["GPR"].mean()) / gpr["GPR"].std()
                 
-                # OLS regression
                 import statsmodels.api as sm
                 X = sm.add_constant(aligned["gpr_std"])
                 model = sm.OLS(aligned["return"], X).fit()
                 forecast = model.predict([1, gpr_std])[0]
                 
-                # Actual next-day return
-                next_day = current + timedelta(days=1)
-                try:
-                    actual = returns.loc[next_day]
-                except KeyError:
-                    continue
-                
-                # Position (fractional Kelly approx)
+                # Position sizing
                 sigma = aligned["return"].std()
                 kelly = 0.5 * forecast / (sigma**2 + 1e-8)
-                position = np.clip(kelly * 0.5, -1.0, 1.0)  # conservative risk
+                position = np.clip(kelly * 0.5, -1.0, 1.0)
                 
                 results.append({
                     'date': current,
                     'pair': pair_name,
                     'forecast': forecast,
-                    'actual_return': actual,
+                    'actual_return': next_return,  # next-day return
                     'position': position,
                     'gpr': gpr_today
                 })
-            except Exception as e:
-                continue
-                
+        
         current += timedelta(days=1)
+        # Optional: progress indicator
+        if (current - start_date).days % 100 == 0:
+            print(f"  → Processed up to {current.date()}")
     
     return pd.DataFrame(results)
+
 
 def analyze_results(df):
     if df.empty:
