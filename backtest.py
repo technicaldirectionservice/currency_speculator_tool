@@ -13,11 +13,15 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Reuse your currency list
+# Import currency symbols
 from forex_gpr import CURRENCY_SYMBOLS
 
+# ==============================
+# DATA LOADING FUNCTIONS
+# ==============================
+
 def fetch_gpr_data():
-    """Fetch GPR data (same as forex_gpr.py)"""
+    """Fetch GPR data from the official source (updated 2025)"""
     import pandas as pd
     url = "https://www.matteoiacoviello.com/gpr_files/data_gpr_export.xls"
     df = pd.read_excel(url)
@@ -25,35 +29,48 @@ def fetch_gpr_data():
     df = df.dropna(subset=['Date', 'GPR'])
     return df.set_index('Date')[['GPR']]
 
-def get_fx_series(symbol, start="2010-01-01", end="2025-12-31"):
-    """Fetch FX series"""
-    data = yf.download(symbol, start=start, end=end)
-    if isinstance(data.columns, pd.MultiIndex):
-        data.columns = data.columns.droplevel(1)
-    return data['Close']
-
-def compute_cross_rate(base, quote, start="2010-01-01", end="2025-12-31"):
-    """Compute base/quote cross rate"""
-    from forex_gpr import CURRENCY_SYMBOLS
-
-    #Handle USD as base quote
-    if base == "USD":
-        base_series = pd.Series(1.0, index=pd.date_range(start, end, freq='D'))
-    else:
-        if base not in CURRENCY_SYMBOLS:
-            raise ValueError(f"Base currency {base} not supported")
-        symbol= CURRENCY_SYMBOLS[base]
-        base_series = get_fx_series(symbol, start, end)
+def preload_fx_data(pairs, start="2010-01-01", end="2025-12-31"):
+    """Download all FX data once at the start"""
+    fx_data = {}
     
-    if quote == "USD":
-        quote_series = pd.Series(1.0, index=pd.date_range(start, end, freq='D'))
-    else:
-        quote_series = get_fx_series(symbol, start, end)
+    # Build list of unique symbols
+    symbols_needed = set()
+    for _, base, quote in pairs:
+        if base != "USD":
+            symbols_needed.add(CURRENCY_SYMBOLS[base])
+        if quote != "USD":
+            symbols_needed.add(CURRENCY_SYMBOLS[quote])
     
-    df = pd.DataFrame({'base_usd': base_series, 'quote_usd': quote_series}).dropna()
-    cross_rate = df['quote_usd'] / df['base_usd']
-    returns = cross_rate.pct_change().dropna()
-    return returns
+    # Download each symbol once
+    for symbol in symbols_needed:
+        print(f"📥 Downloading {symbol}...")
+        data = yf.download(symbol, start=start, end=end, auto_adjust=True, progress=False)
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.droplevel(1)
+        fx_data[symbol] = data['Close']
+    
+    # Add USD as constant 1.0
+    full_index = pd.date_range(start, end, freq='D')
+    fx_data["USD"] = pd.Series(1.0, index=full_index)
+    
+    return fx_data
+
+def compute_cross_return(base, quote, date, fx_data):
+    """Compute return for base/quote on a given date using preloaded data"""
+    try:
+        base_series = fx_data["USD"] if base == "USD" else fx_data[CURRENCY_SYMBOLS[base]]
+        quote_series = fx_data["USD"] if quote == "USD" else fx_data[CURRENCY_SYMBOLS[quote]]
+        
+        df = pd.DataFrame({'base_usd': base_series, 'quote_usd': quote_series}).dropna()
+        cross_rate = df['quote_usd'] / df['base_usd']
+        returns = cross_rate.pct_change().dropna()
+        return returns.loc[date]
+    except (KeyError, ValueError):
+        return None
+
+# ==============================
+# MAIN BACKTEST
+# ==============================
 
 def run_backtest():
     PAIRS = [
@@ -66,7 +83,7 @@ def run_backtest():
     start_date = datetime(2020, 1, 1)
     end_date = datetime(2025, 12, 31)
     
-    # ✅ Preload ALL data once
+    # Preload ALL data once
     print("⏳ Preloading FX and GPR data...")
     fx_data = preload_fx_data(PAIRS, start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
     gpr = fetch_gpr_data()
@@ -78,6 +95,7 @@ def run_backtest():
     
     while current <= end_date:
         if current.weekday() < 5:  # Weekdays only
+            # Get GPR as of current date
             try:
                 gpr_today = gpr_daily.loc[:current].iloc[-1]['GPR']
                 gpr_std = (gpr_today - gpr['GPR'].mean()) / gpr['GPR'].std()
@@ -86,18 +104,13 @@ def run_backtest():
                 continue
             
             for pair_name, base, quote in PAIRS:
-                # Get actual return for this date
-                actual_return = compute_cross_return(base, quote, current, fx_data)
+                # Get actual return for NEXT DAY (what we're forecasting)
+                next_day = current + timedelta(days=1)
+                actual_return = compute_cross_return(base, quote, next_day, fx_data)
                 if actual_return is None:
                     continue
                 
-                # Get next-day return for "actual" (what we're predicting for)
-                next_day = current + timedelta(days=1)
-                next_return = compute_cross_return(base, quote, next_day, fx_data)
-                if next_return is None:
-                    continue
-                
-                # Simple regression on full history up to current
+                # Build historical returns up to current date
                 base_series = fx_data["USD"] if base == "USD" else fx_data[CURRENCY_SYMBOLS[base]]
                 quote_series = fx_data["USD"] if quote == "USD" else fx_data[CURRENCY_SYMBOLS[quote]]
                 df_full = pd.DataFrame({'base_usd': base_series, 'quote_usd': quote_series}).dropna()
@@ -108,18 +121,20 @@ def run_backtest():
                 if len(returns_hist) < 100:
                     continue
                 
+                # Align with GPR
                 aligned = returns_hist.to_frame().join(gpr_daily, how="inner").dropna()
                 if len(aligned) < 50:
                     continue
                 
                 aligned["gpr_std"] = (aligned["GPR"] - gpr["GPR"].mean()) / gpr["GPR"].std()
                 
+                # OLS regression
                 import statsmodels.api as sm
                 X = sm.add_constant(aligned["gpr_std"])
                 model = sm.OLS(aligned["return"], X).fit()
                 forecast = model.predict([1, gpr_std])[0]
                 
-                # Position sizing
+                # Position sizing (conservative)
                 sigma = aligned["return"].std()
                 kelly = 0.5 * forecast / (sigma**2 + 1e-8)
                 position = np.clip(kelly * 0.5, -1.0, 1.0)
@@ -128,28 +143,30 @@ def run_backtest():
                     'date': current,
                     'pair': pair_name,
                     'forecast': forecast,
-                    'actual_return': next_return,  # next-day return
+                    'actual_return': actual_return,
                     'position': position,
                     'gpr': gpr_today
                 })
         
         current += timedelta(days=1)
-        # Optional: progress indicator
+        # Progress indicator every 100 days
         if (current - start_date).days % 100 == 0:
             print(f"  → Processed up to {current.date()}")
     
     return pd.DataFrame(results)
 
+# ==============================
+# ANALYSIS
+# ==============================
 
 def analyze_results(df):
     if df.empty:
         print("❌ No results to analyze")
         return
         
-    # Strategy returns
     df['strategy_return'] = df['position'] * df['actual_return']
     
-    # Sharpe ratio (annualized)
+    # Sharpe ratio
     daily_sharpe = df['strategy_return'].mean() / df['strategy_return'].std()
     annualized_sharpe = daily_sharpe * np.sqrt(252)
     
@@ -162,12 +179,9 @@ def analyze_results(df):
     # Accuracy
     df['correct'] = (df['forecast'] > 0) == (df['actual_return'] > 0)
     accuracy = df['correct'].mean()
-    
-    # High-GPR accuracy
     gpr_90 = df['gpr'].quantile(0.9)
     high_gpr_acc = df[df['gpr'] >= gpr_90]['correct'].mean()
     
-    # Output
     print("\n" + "="*50)
     print("📈 BACKTEST SUMMARY (2020–2025)")
     print(f"• Total Signals: {len(df)}")
@@ -177,9 +191,12 @@ def analyze_results(df):
     print(f"• Max Drawdown: {max_drawdown:.2%}")
     print("="*50)
     
-    # Save
     df.to_csv("backtest_results.csv", index=False)
     print("\n✅ Results saved to backtest_results.csv")
+
+# ==============================
+# RUN
+# ==============================
 
 if __name__ == "__main__":
     results = run_backtest()
