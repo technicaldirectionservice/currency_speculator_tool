@@ -54,6 +54,7 @@ CURRENCY_SYMBOLS = {
     "KRW": "KRW=X",
     "DKK": "DKK=X",
     "RUB": "RUB=X",
+    "INR": "INR=X",
 }
 
 def fetch_gpr_data():

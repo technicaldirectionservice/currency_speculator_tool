@@ -25,6 +25,8 @@ BIS_V2_CODES = {
     "HKD": "D.HK",
     "CNY": "D.CN",
     "RUB": "D.RU",
+    "INR": "D.IN",
+    
 }
 
 def download_all():
