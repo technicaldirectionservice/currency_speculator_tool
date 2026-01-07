@@ -1,40 +1,30 @@
 #!/usr/bin/env python3
 """
-Backtest forex_gpr logic from 2020–2025
-Includes Sharpe ratio, drawdown, and BIS policy rate adjustments
+Backtest GPR-based forex signals from 1985–2019
+Focus: USD/JPY and USD/CHF during pre-2020 safe-haven regime
 """
 
 import pandas as pd
 import numpy as np
-import pymc as pm
 import yfinance as yf
 import sys
 import os
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-# Import currency symbols
 from forex_gpr import CURRENCY_SYMBOLS
 
 # ==============================
-# HELPER: Load Policy Rates
+# Policy Rate Loader (from BIS)
 # ==============================
 
 def load_policy_rate_as_of(currency, as_of_date):
-    """Load central bank policy rate as of a given date using BIS historical data."""
-    import os
     filepath = f"data/policy_rates_{currency.lower()}.csv"
-    
     if not os.path.exists(filepath):
         fallback = {
-            "USD": 5.25, "JPY": 0.10, "CHF": 1.50, "EUR": 4.50,
-            "GBP": 4.75, "CAD": 4.00, "AUD": 4.10, "NZD": 4.25,
-            "DKK": 3.80, "ILS": 4.50, "MXN": 11.00, "ZAR": 8.25,
-            "KRW": 3.50, "HKD": 5.00, "CNY": 3.45, "RUB": 21.00
+            "USD": 5.0, "JPY": 0.5, "CHF": 1.0, "EUR": 3.0
         }
         return fallback.get(currency, 0.0)
-    
     try:
         df = pd.read_csv(filepath, parse_dates=["date"])
         df = df[df["date"] <= as_of_date].sort_values("date")
@@ -42,45 +32,39 @@ def load_policy_rate_as_of(currency, as_of_date):
             return df.iloc[-1]["rate"]
     except Exception:
         pass
+    fallback = {"USD": 5.0, "JPY": 0.5, "CHF": 1.0}
     return fallback.get(currency, 0.0)
 
 # ==============================
-# DATA LOADING FUNCTIONS
+# Data Loading
 # ==============================
 
 def fetch_gpr_data():
-    """Fetch GPR data from the official source (updated 2025)"""
-    import pandas as pd
     url = "https://www.matteoiacoviello.com/gpr_files/data_gpr_export.xls"
     df = pd.read_excel(url)
     df['Date'] = pd.to_datetime(df['month'], errors='coerce')
     df = df.dropna(subset=['Date', 'GPR'])
     return df.set_index('Date')[['GPR']]
 
-def preload_fx_data(pairs, start="2010-01-01", end="2025-12-31"):
-    """Download all FX data once at the start"""
+def preload_fx_data(pairs, start="1980-01-01", end="2020-12-31"):
     fx_data = {}
-    
     symbols_needed = set()
     for _, base, quote in pairs:
         if base != "USD":
             symbols_needed.add(CURRENCY_SYMBOLS[base])
         if quote != "USD":
             symbols_needed.add(CURRENCY_SYMBOLS[quote])
-    
     for symbol in symbols_needed:
         print(f"📥 Downloading {symbol}...")
         data = yf.download(symbol, start=start, end=end, auto_adjust=True, progress=False)
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = data.columns.droplevel(1)
         fx_data[symbol] = data['Close']
-    
     full_index = pd.date_range(start, end, freq='D')
     fx_data["USD"] = pd.Series(1.0, index=full_index)
     return fx_data
 
 def compute_cross_return(base, quote, date, fx_data):
-    """Compute return for base/quote on a given date using preloaded data"""
     try:
         base_series = fx_data["USD"] if base == "USD" else fx_data[CURRENCY_SYMBOLS[base]]
         quote_series = fx_data["USD"] if quote == "USD" else fx_data[CURRENCY_SYMBOLS[quote]]
@@ -92,23 +76,22 @@ def compute_cross_return(base, quote, date, fx_data):
         return None
 
 # ==============================
-# MAIN BACKTEST
+# Main Backtest
 # ==============================
 
 def run_backtest():
     PAIRS = [
         ("USD/JPY", "USD", "JPY"),
         ("USD/CHF", "USD", "CHF"),
-        ("EUR/USD", "EUR", "USD"),
-        ("USD/ILS", "USD", "ILS"),
     ]
     
-    start_date = datetime(2020, 1, 1)
-    end_date = datetime(2025, 12, 31)
+    start_date = datetime(1985, 1, 1)
+    end_date = datetime(2019, 12, 31)
     
-    print("⏳ Preloading FX and GPR data...")
-    fx_data = preload_fx_data(PAIRS, start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
+    print("⏳ Preloading FX and GPR data (1985–2019)...")
+    fx_data = preload_fx_data(PAIRS, start="1980-01-01", end="2020-12-31")
     gpr = fetch_gpr_data()
+    # Simulate 1-month GPR publication lag
     gpr.index = gpr.index + pd.DateOffset(months=1)
     gpr_daily = gpr.resample("D").ffill()
     
@@ -117,7 +100,7 @@ def run_backtest():
     print(f"📊 Backtesting from {start_date.date()} to {end_date.date()}...")
     
     while current <= end_date:
-        if current.weekday() < 5:  # Weekdays only
+        if current.weekday() < 5:
             try:
                 gpr_today = gpr_daily.loc[:current].iloc[-1]['GPR']
                 gpr_std = (gpr_today - gpr['GPR'].mean()) / gpr['GPR'].std()
@@ -162,20 +145,21 @@ def run_backtest():
                 forecast = model.predict([1, gpr_std, rate_diff])[0]
                                
                 
-                
-                # === POLICY RATE ADJUSTMENT (SYNCED WITH forex_gpr.py) ===
+                # Policy rate adjustment
                 try:
                     base_rate = load_policy_rate_as_of(base, current)
                     quote_rate = load_policy_rate_as_of(quote, current)
                     rate_diff = base_rate - quote_rate
 
-                    adjusted_forecast = forecast
+                    if (base == "JPY" or quote == "JPY") and abs(rate_diff) > 1.0:
+                        if gpr_today > gpr["GPR"].median():
+                            forecast *= 0.6
 
-                
+                    if (base == "CHF" or quote == "CHF") and gpr_today > gpr["GPR"].quantile(0.8):
+                        forecast *= 1.3
 
                 except Exception:
-                    pass  # Skip adjustment if fails
-                # === END ADJUSTMENT ===
+                    pass
                 
                 # Position sizing
                 sigma = aligned["return"].std()
@@ -192,40 +176,36 @@ def run_backtest():
                 })
         
         current += timedelta(days=1)
-        if (current - start_date).days % 100 == 0:
+        if (current - start_date).days % 500 == 0:
             print(f"  → Processed up to {current.date()}")
     
     return pd.DataFrame(results)
 
 # ==============================
-# ANALYSIS
+# Analysis
 # ==============================
 
 def analyze_results(df):
     if df.empty:
-        print("❌ No results to analyze")
+        print("❌ No results")
         return
         
     df['strategy_return'] = df['position'] * df['actual_return']
-    
-    # Sharpe ratio
     daily_sharpe = df['strategy_return'].mean() / df['strategy_return'].std()
     annualized_sharpe = daily_sharpe * np.sqrt(252)
     
-    # Drawdown
     cum_returns = (1 + df['strategy_return']).cumprod()
     running_max = cum_returns.cummax()
     drawdown = (cum_returns - running_max) / running_max
     max_drawdown = drawdown.min()
     
-    # Accuracy
     df['correct'] = (df['forecast'] > 0) == (df['actual_return'] > 0)
     accuracy = df['correct'].mean()
     gpr_90 = df['gpr'].quantile(0.9)
     high_gpr_acc = df[df['gpr'] >= gpr_90]['correct'].mean()
     
     print("\n" + "="*50)
-    print("📈 BACKTEST SUMMARY (2020–2025)")
+    print("📈 BACKTEST SUMMARY (1985–2019)")
     print(f"• Total Signals: {len(df)}")
     print(f"• Directional Accuracy: {accuracy:.1%}")
     print(f"• High-GPR Accuracy: {high_gpr_acc:.1%} (top 10% GPR days)")
@@ -233,8 +213,8 @@ def analyze_results(df):
     print(f"• Max Drawdown: {max_drawdown:.2%}")
     print("="*50)
     
-    df.to_csv("backtest_results.csv", index=False)
-    print("\n✅ Results saved to backtest_results.csv")
+    df.to_csv("backtest_1985_2019_results.csv", index=False)
+    print("\n✅ Results saved to backtest_1985_2019_results.csv")
 
 # ==============================
 # RUN
