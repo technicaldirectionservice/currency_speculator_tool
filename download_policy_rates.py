@@ -24,7 +24,6 @@ BIS_V2_CODES = {
     "KRW": "D.KR",
     "HKD": "D.HK",
     "CNY": "D.CN",
-    "RUB": "D.RU",
     "INR": "D.IN",
     
 }

@@ -53,7 +53,6 @@ CURRENCY_SYMBOLS = {
     "ILS": "ILS=X",
     "KRW": "KRW=X",
     "DKK": "DKK=X",
-    "RUB": "RUB=X",
     "INR": "INR=X",
 }
 
@@ -179,7 +178,8 @@ def run_bayesian_model(forex_returns, pair_name):
     try:
         vix_data = yf.download("^VIX", period="1d", auto_adjust=True, progress=False)
         if not vix_data.empty:
-            vix = float(vix_data['Close'].iloc[-1])  # ← FORCE TO FLOAT
+            vix = vix_data['Close'].iloc[-1].item()
+            #vix = float(vix_data['Close'].iloc[-1])  # ← FORCE TO FLOAT
     except:
         vix = 0.0
 
